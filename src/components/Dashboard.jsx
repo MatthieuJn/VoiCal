@@ -24,6 +24,8 @@ export default function Dashboard({ userId }) {
   const [goals, setGoals] = useState(DEFAULT_GOALS)
   const [weight, setWeight] = useState('')
   const [savedWeight, setSavedWeight] = useState(null)
+  const [bedtime, setBedtime] = useState('')
+  const [savedBedtime, setSavedBedtime] = useState(null)
   const [showMealModal, setShowMealModal] = useState(false)
   const [showActivityModal, setShowActivityModal] = useState(false)
   const [showTemplate, setShowTemplate] = useState(false)
@@ -78,8 +80,8 @@ export default function Dashboard({ userId }) {
     const { data: a } = await supabase.from('activities').select('*').eq('user_id', userId).eq('date', selectedDate).order('created_at')
     setActivities(a || [])
 
-    const { data: w } = await supabase.from('weight_logs').select('weight').eq('user_id', userId).eq('date', selectedDate).maybeSingle()
-    if (w) setSavedWeight(w.weight)
+    const { data: w } = await supabase.from('weight_logs').select('weight,bedtime').eq('user_id', userId).eq('date', selectedDate).maybeSingle()
+    if (w) { setSavedWeight(w.weight); setSavedBedtime(w.bedtime || null) }
   }
 
   const totals = meals.reduce((acc, m) => ({
@@ -258,6 +260,18 @@ export default function Dashboard({ userId }) {
     setWeight('')
   }
 
+  async function saveBedtime() {
+    if (!bedtime) return
+    const payload = { user_id: userId, date: selectedDate, bedtime }
+    let { error } = await supabase.from('weight_logs').upsert(payload, { onConflict: 'user_id,date' })
+    if (error) {
+      const { bedtime: _b, ...fallback } = payload
+      await supabase.from('weight_logs').upsert(fallback, { onConflict: 'user_id,date' })
+    }
+    setSavedBedtime(bedtime)
+    setBedtime('')
+  }
+
   const isToday = selectedDate === today
   const dateLabel = new Date(selectedDate + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
 
@@ -316,6 +330,22 @@ export default function Dashboard({ userId }) {
             onKeyDown={e => e.key === 'Enter' && saveWeight()}
           />
           <button className="btn-add" onClick={saveWeight}>Enregistrer</button>
+        </div>
+      </section>
+
+      <section>
+        <div className="section-header">
+          <h2>Coucher</h2>
+        </div>
+        <div className="weight-row">
+          {savedBedtime && <span className="weight-saved">🌙 <strong>{savedBedtime.slice(0,5)}</strong></span>}
+          <input
+            type="time"
+            value={bedtime}
+            onChange={e => setBedtime(e.target.value)}
+            className="input input-small"
+          />
+          <button className="btn-add" onClick={saveBedtime}>Enregistrer</button>
         </div>
       </section>
 

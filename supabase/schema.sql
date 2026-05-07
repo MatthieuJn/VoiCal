@@ -26,6 +26,8 @@ create table meals (
   created_at  timestamptz default now()
 );
 
+-- ALTER TABLE weight_logs ADD COLUMN bedtime time;
+
 -- Activités sportives
 create table activities (
   id              uuid primary key default gen_random_uuid(),
