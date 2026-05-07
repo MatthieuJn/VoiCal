@@ -12,9 +12,10 @@ export default function History({ userId }) {
     start.setDate(start.getDate() - (period === 'week' ? 7 : 30))
     const startDate = start.toISOString().split('T')[0]
 
-    const [{ data: meals }, { data: activities }] = await Promise.all([
+    const [{ data: meals }, { data: activities }, { data: weights }] = await Promise.all([
       supabase.from('meals').select('*').eq('user_id', userId).gte('date', startDate).order('date'),
       supabase.from('activities').select('*').eq('user_id', userId).gte('date', startDate).order('date'),
+      supabase.from('weight_logs').select('date,weight').eq('user_id', userId).gte('date', startDate).order('date'),
     ])
 
     const byDate = {}
@@ -28,9 +29,13 @@ export default function History({ userId }) {
       byDate[m.date].meals.push(m)
     }
     for (const a of (activities || [])) {
-      if (!byDate[a.date]) byDate[a.date] = { meals: [], activities: [], cal: 0, prot: 0, carb: 0, fat: 0, fib: 0, burned: 0 }
+      if (!byDate[a.date]) byDate[a.date] = { meals: [], activities: [], cal: 0, prot: 0, carb: 0, fat: 0, fib: 0, burned: 0, weight: null }
       byDate[a.date].burned += a.calories_burned || 0
       byDate[a.date].activities.push(a)
+    }
+    for (const w of (weights || [])) {
+      if (!byDate[w.date]) byDate[w.date] = { meals: [], activities: [], cal: 0, prot: 0, carb: 0, fat: 0, fib: 0, burned: 0, weight: null }
+      byDate[w.date].weight = w.weight
     }
 
     setDays(Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0])))
@@ -84,6 +89,7 @@ export default function History({ userId }) {
           {d.activities.map(a => (
             <span key={a.id} className="activity-tag">🏃 {a.name} −{Math.round(a.calories_burned)} kcal</span>
           ))}
+          {d.weight && <span className="weight-tag">⚖️ {d.weight} kg</span>}
         </div>
       ))}
     </div>

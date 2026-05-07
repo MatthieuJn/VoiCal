@@ -21,8 +21,9 @@ create table meals (
   proteins   numeric(8,1) not null default 0,
   carbs      numeric(8,1) not null default 0,
   fats       numeric(8,1) not null default 0,
-  fibers     numeric(8,1) not null default 0,
-  created_at timestamptz default now()
+  fibers      numeric(8,1) not null default 0,
+  ingredients jsonb,
+  created_at  timestamptz default now()
 );
 
 -- Activités sportives
