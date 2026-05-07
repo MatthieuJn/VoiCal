@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { parseMealInput } from '../lib/parser'
-import { analyzeMeal, analyzeMealFromPhoto, recalculateMeal, computeTotals } from '../lib/gemini'
+import { analyzeMeal, analyzeMealFromPhoto, recalculateMeal, computeTotals, GEMINI_MODEL } from '../lib/gemini'
 import Gauge from './Gauge'
 
 const DEFAULT_GOALS = { calories: 2000, proteins: 150, carbs: 200, fats: 70, fibers: 30 }
@@ -45,21 +45,40 @@ export default function Dashboard({ userId }) {
   const [activityCalories, setActivityCalories] = useState('')
   const [activityDuration, setActivityDuration] = useState('')
 
-  const today = new Date().toISOString().split('T')[0]
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const [selectedDate, setSelectedDate] = useState(today)
 
-  useEffect(() => { loadData() }, [userId])
+  useEffect(() => { loadData() }, [userId, selectedDate])
+
+  function prevDay() {
+    setSelectedDate(d => {
+      const dt = new Date(d + 'T12:00:00')
+      dt.setDate(dt.getDate() - 1)
+      return dt.toISOString().split('T')[0]
+    })
+  }
+
+  function nextDay() {
+    if (selectedDate >= today) return
+    setSelectedDate(d => {
+      const dt = new Date(d + 'T12:00:00')
+      dt.setDate(dt.getDate() + 1)
+      return dt.toISOString().split('T')[0]
+    })
+  }
 
   async function loadData() {
     const { data: g } = await supabase.from('user_goals').select('*').eq('user_id', userId).maybeSingle()
     if (g) setGoals(g)
 
-    const { data: m } = await supabase.from('meals').select('*').eq('user_id', userId).eq('date', today).order('created_at')
+    const { data: m } = await supabase.from('meals').select('*').eq('user_id', userId).eq('date', selectedDate).order('created_at')
     setMeals(m || [])
 
-    const { data: a } = await supabase.from('activities').select('*').eq('user_id', userId).eq('date', today).order('created_at')
+    const { data: a } = await supabase.from('activities').select('*').eq('user_id', userId).eq('date', selectedDate).order('created_at')
     setActivities(a || [])
 
-    const { data: w } = await supabase.from('weight_logs').select('weight').eq('user_id', userId).eq('date', today).maybeSingle()
+    const { data: w } = await supabase.from('weight_logs').select('weight').eq('user_id', userId).eq('date', selectedDate).maybeSingle()
     if (w) setSavedWeight(w.weight)
   }
 
@@ -181,7 +200,7 @@ export default function Dashboard({ userId }) {
     if (!data || data.calories === 0) return
 
     const payload = {
-      user_id: userId, date: today,
+      user_id: userId, date: selectedDate,
       name: mealName || 'Repas',
       raw_input: mealInput,
       calories: data.calories,
@@ -210,7 +229,7 @@ export default function Dashboard({ userId }) {
       ? Math.max(0, total - (80 * parseFloat(activityDuration) / 60))
       : total
     await supabase.from('activities').insert({
-      user_id: userId, date: today,
+      user_id: userId, date: selectedDate,
       name: activityName, type: activityType,
       calories_burned: Math.round(net),
     })
@@ -232,21 +251,29 @@ export default function Dashboard({ userId }) {
   async function saveWeight() {
     if (!weight) return
     await supabase.from('weight_logs').upsert(
-      { user_id: userId, date: today, weight: parseFloat(weight) },
+      { user_id: userId, date: selectedDate, weight: parseFloat(weight) },
       { onConflict: 'user_id,date' }
     )
     setSavedWeight(parseFloat(weight))
     setWeight('')
   }
 
-  const dateLabel = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
+  const isToday = selectedDate === today
+  const dateLabel = new Date(selectedDate + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
 
   const liveTotals = editableIngredients.length > 0 ? computeTotals(editableIngredients) : null
 
   return (
     <div className="dashboard">
-      <h1>Aujourd'hui</h1>
-      <p className="date-label">{dateLabel}</p>
+      <div className="date-nav">
+        <button className="date-nav-btn" onClick={prevDay}>‹</button>
+        <div className="date-nav-center">
+          <h1>{isToday ? "Aujourd'hui" : dateLabel}</h1>
+          {!isToday && <p className="date-label">{dateLabel}</p>}
+          {isToday && <p className="date-label">{dateLabel}</p>}
+        </div>
+        <button className="date-nav-btn" onClick={nextDay} disabled={isToday}>›</button>
+      </div>
 
       <div className="gauges">
         <Gauge label="Calories" current={netCalories} goal={goals.calories} color="var(--cal)" unit="kcal" />
@@ -362,6 +389,7 @@ export default function Dashboard({ userId }) {
             <button className="btn-ai" onClick={analyzeWithAI} disabled={aiLoading || (!mealInput.trim() && !selectedImage)}>
               {aiLoading ? 'Analyse en cours…' : selectedImage ? '✨ Analyser la photo' : '✨ Analyser avec Gemini'}
             </button>
+            <p className="model-label">Modèle : {GEMINI_MODEL}</p>
 
             {aiError && <p className="ai-error">{aiError}</p>}
 

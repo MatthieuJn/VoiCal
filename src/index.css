@@ -233,6 +233,29 @@ select.input { cursor: pointer; }
 }
 
 /* ── Dashboard ── */
+.date-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.date-nav-center { text-align: center; flex: 1; }
+
+.date-nav-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 28px;
+  padding: 0 10px;
+  cursor: pointer;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.date-nav-btn:disabled { color: var(--border); cursor: default; }
+.date-nav-btn:not(:disabled):hover { color: var(--accent); }
+
 .dashboard h1 { font-size: 24px; font-weight: 700; }
 .date-label { color: var(--text-muted); font-size: 14px; margin-bottom: 20px; text-transform: capitalize; }
 
@@ -347,6 +370,13 @@ section { margin-bottom: 24px; }
 }
 
 .btn-ai:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.model-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: 6px;
+}
 
 .ai-error {
   color: var(--danger);

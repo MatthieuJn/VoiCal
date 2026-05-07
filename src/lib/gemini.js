@@ -2,6 +2,8 @@ import { GoogleGenAI } from '@google/genai'
 
 const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY })
 
+export const GEMINI_MODEL = 'gemini-2.5-flash'
+
 export function computeTotals(ingredients) {
   return ingredients.reduce((acc, ing) => {
     const f = (ing.quantity_g || 0) / 100
@@ -37,7 +39,7 @@ Réponds UNIQUEMENT avec un objet JSON valide, sans markdown, sans texte autour 
 Repas : "${text}"`
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: GEMINI_MODEL,
     contents: prompt,
   })
 
@@ -59,7 +61,7 @@ Réponds UNIQUEMENT avec un objet JSON valide, sans markdown :
 }`
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: GEMINI_MODEL,
     contents: [
       {
         role: 'user',
@@ -97,7 +99,7 @@ Valeurs actuelles (certaines ont été modifiées par l'utilisateur) :
 ${list}`
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: GEMINI_MODEL,
     contents: prompt,
   })
 
