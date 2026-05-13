@@ -214,6 +214,7 @@ export default function History({ userId }) {
         label: dt.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }),
         consumed: Math.round(d.calories),
         burned: Math.round(d.burned),
+        proteins: Math.round(d.proteins),
         deficit: Math.round(goals.calories - (d.calories - d.burned)),
       }
     })
@@ -256,6 +257,7 @@ export default function History({ userId }) {
                 {d.isMonday && i > 0 && <div className="week-separator" />}
                 <div className="deficit-row">
                   <span className="deficit-day">{d.label}</span>
+                  <span className="deficit-proteins">P{d.proteins}</span>
                   <span className="deficit-eaten">▲ {d.consumed}</span>
                   {d.burned > 0 && <span className="deficit-burned">▼ {d.burned}</span>}
                   <span className={`deficit-val ${d.deficit >= 0 ? 'deficit-positive' : 'deficit-negative'}`}>
