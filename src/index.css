@@ -819,6 +819,73 @@ section { margin-bottom: 24px; }
   margin-bottom: 4px;
 }
 
+/* ── Activity calc breakdown ── */
+.activity-calc-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.activity-calc-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+.activity-calc-total {
+  border-bottom: none;
+  font-size: 15px;
+  padding-top: 6px;
+  margin-top: 2px;
+}
+
+/* ── Déficit cumulé ── */
+.deficit-total {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 28px;
+  font-weight: 700;
+  padding: 12px 0 8px;
+}
+.deficit-total-label {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.deficit-positive { color: var(--accent); }
+.deficit-negative { color: var(--danger); }
+
+.deficit-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.deficit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.deficit-day {
+  width: 72px;
+  color: var(--text-muted);
+  text-transform: capitalize;
+  flex-shrink: 0;
+}
+.deficit-net {
+  flex: 1;
+  color: var(--text-muted);
+}
+.deficit-val {
+  font-weight: 600;
+  font-size: 14px;
+  min-width: 60px;
+  text-align: right;
+}
+
 /* ── Settings ── */
 .setting-row {
   display: flex;

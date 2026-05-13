@@ -63,7 +63,10 @@ export default function Dashboard({ userId }) {
   const [activityAiLoading, setActivityAiLoading] = useState(false)
   const [activityAiError, setActivityAiError] = useState('')
   const [activityAiResult, setActivityAiResult] = useState(null)
+  const [selectedActivityImage, setSelectedActivityImage] = useState(null)
+  const [activityImagePreviewUrl, setActivityImagePreviewUrl] = useState(null)
   const activityRecRef = useRef(null)
+  const activityFileInputRef = useRef(null)
 
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -264,13 +267,39 @@ export default function Dashboard({ userId }) {
     setActivityListening(false)
   }
 
+  function handleActivityImageSelect(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (activityImagePreviewUrl) URL.revokeObjectURL(activityImagePreviewUrl)
+    setSelectedActivityImage(file)
+    setActivityImagePreviewUrl(URL.createObjectURL(file))
+    setActivityAiResult(null)
+  }
+
+  function removeActivityImage() {
+    setSelectedActivityImage(null)
+    if (activityImagePreviewUrl) URL.revokeObjectURL(activityImagePreviewUrl)
+    setActivityImagePreviewUrl(null)
+    if (activityFileInputRef.current) activityFileInputRef.current.value = ''
+  }
+
   async function analyzeActivityWithAI() {
-    if (!activityInput.trim()) return
+    if (!activityInput.trim() && !selectedActivityImage) return
     setActivityAiLoading(true)
     setActivityAiError('')
     setActivityAiResult(null)
     try {
-      const result = await analyzeActivity(activityInput, savedWeight, getUserAge(), USER_HEIGHT_CM)
+      let imageBase64 = null, imageMime = null
+      if (selectedActivityImage) {
+        imageBase64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result.split(',')[1])
+          reader.onerror = reject
+          reader.readAsDataURL(selectedActivityImage)
+        })
+        imageMime = selectedActivityImage.type
+      }
+      const result = await analyzeActivity(activityInput, savedWeight, getUserAge(), USER_HEIGHT_CM, imageBase64, imageMime)
       setActivityAiResult(result)
       if (result.name && !activityName) setActivityName(result.name)
       setActivityCalories(String(result.net_calories))
@@ -288,6 +317,7 @@ export default function Dashboard({ userId }) {
     setActivityInput('')
     setActivityAiResult(null)
     setActivityAiError('')
+    removeActivityImage()
   }
 
   async function addActivity() {
@@ -678,18 +708,54 @@ export default function Dashboard({ userId }) {
               </button>
             </div>
 
+            <input ref={activityFileInputRef} type="file" accept="image/*"
+              style={{ display: 'none' }} onChange={handleActivityImageSelect} />
+            {activityImagePreviewUrl ? (
+              <div className="photo-preview">
+                <img src={activityImagePreviewUrl} alt="Activité" className="photo-img" />
+                <button className="btn-remove-photo" onClick={removeActivityImage}>× Retirer</button>
+              </div>
+            ) : (
+              <button className="btn-photo" onClick={() => activityFileInputRef.current?.click()}>
+                📷 Ajouter une photo
+              </button>
+            )}
+
             <button className="btn-ai" onClick={analyzeActivityWithAI}
-              disabled={activityAiLoading || !activityInput.trim()}>
-              {activityAiLoading ? 'Analyse en cours…' : '✨ Estimer les calories avec Gemini'}
+              disabled={activityAiLoading || (!activityInput.trim() && !selectedActivityImage)}>
+              {activityAiLoading ? 'Analyse en cours…' : selectedActivityImage ? '✨ Analyser la photo' : '✨ Estimer les calories avec Gemini'}
             </button>
             {!savedWeight && <p className="ai-error" style={{ fontSize: 12 }}>⚠ Poids du jour non renseigné — estimation moins précise</p>}
-
             {activityAiError && <p className="ai-error">{activityAiError}</p>}
 
             {activityAiResult && (
-              <div className="parse-preview">
-                ✨ {activityAiResult.net_calories} kcal net
-                {activityAiResult.notes && <span style={{ color: 'var(--text-muted)', fontSize: 11, display: 'block', marginTop: 4 }}>{activityAiResult.notes}</span>}
+              <div className="ai-breakdown">
+                <p className="breakdown-title">Détail du calcul</p>
+                <div className="activity-calc-rows">
+                  <div className="activity-calc-row">
+                    <span>Durée estimée</span>
+                    <strong>{activityAiResult.duration_min} min</strong>
+                  </div>
+                  <div className="activity-calc-row">
+                    <span>MET utilisé</span>
+                    <strong>{activityAiResult.met}</strong>
+                  </div>
+                  <div className="activity-calc-row">
+                    <span>Calories brutes</span>
+                    <strong>{activityAiResult.gross_calories} kcal</strong>
+                  </div>
+                  <div className="activity-calc-row">
+                    <span>− Repos (bureau)</span>
+                    <strong style={{ color: 'var(--text-muted)' }}>−{activityAiResult.rest_calories} kcal</strong>
+                  </div>
+                  <div className="activity-calc-row activity-calc-total">
+                    <span>= Calories nettes</span>
+                    <strong style={{ color: 'var(--accent)' }}>{activityAiResult.net_calories} kcal</strong>
+                  </div>
+                </div>
+                {activityAiResult.notes && (
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>{activityAiResult.notes}</p>
+                )}
               </div>
             )}
 
@@ -706,7 +772,10 @@ export default function Dashboard({ userId }) {
             )}
             <div className="modal-actions">
               <button className="btn-secondary" onClick={resetActivityModal}>Annuler</button>
-              <button className="btn-primary" onClick={addActivity}>Enregistrer</button>
+              <button className="btn-primary" onClick={addActivity}
+                disabled={!activityName || !activityCalories}>
+                Enregistrer
+              </button>
             </div>
           </div>
         </div>

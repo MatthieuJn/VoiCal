@@ -80,9 +80,11 @@ Réponds UNIQUEMENT avec un objet JSON valide, sans markdown :
   return { ...parsed, totals: computeTotals(parsed.ingredients) }
 }
 
-export async function analyzeActivity(description, weightKg, ageYears, heightCm) {
+export async function analyzeActivity(description, weightKg, ageYears, heightCm, imageBase64 = null, mimeType = null) {
   const weightLine = weightKg ? `- Poids : ${weightKg} kg` : `- Poids : inconnu (utilise 80 kg par défaut)`
-  const prompt = `Tu es un expert en physiologie sportive. L'utilisateur décrit une séance sportive.
+  const photoLine = imageBase64 ? '\nUne photo de la séance ou du contexte sportif est jointe.' : ''
+  const descLine = description ? `\nDescription : "${description}"` : ''
+  const prompt = `Tu es un expert en physiologie sportive. L'utilisateur décrit une séance sportive.${photoLine}
 Données physiques :
 ${weightLine}
 - Âge : ${ageYears} ans
@@ -95,17 +97,20 @@ Calcule les calories NETTES brûlées, c'est-à-dire :
 Réponds UNIQUEMENT avec un objet JSON valide, sans markdown :
 {
   "name": "<nom court de l'activité, 2-4 mots>",
-  "net_calories": <nombre entier, calories nettes>,
+  "gross_calories": <nombre entier, calories brutes de l'activité>,
+  "rest_calories": <nombre entier, calories au repos sur la même durée>,
+  "net_calories": <nombre entier, gross − rest>,
   "duration_min": <durée estimée en minutes>,
-  "notes": "<explication courte : ex. '45 min vélo modéré, ~350 kcal brut − 60 kcal repos = 290 kcal net'>"
+  "met": <valeur MET utilisée, nombre décimal>,
+  "notes": "<explication courte : ex. 'MET 6.0 × 80kg × 0.75h = 360 kcal brut − 65 kcal repos = 295 kcal net'>"
 }
+${descLine}`
 
-Description : "${description}"`
+  const contents = imageBase64
+    ? [{ role: 'user', parts: [{ text: prompt }, { inlineData: { mimeType, data: imageBase64 } }] }]
+    : prompt
 
-  const response = await ai.models.generateContent({
-    model: GEMINI_MODEL,
-    contents: prompt,
-  })
+  const response = await ai.models.generateContent({ model: GEMINI_MODEL, contents })
 
   const raw = response.text
   const jsonMatch = raw.match(/\{[\s\S]*\}/)

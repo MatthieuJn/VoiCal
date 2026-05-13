@@ -204,6 +204,15 @@ export default function History({ userId }) {
     .filter(d => d.value !== null)
   const actDays    = days.filter(d => d.activities.length > 0)
 
+  const deficitDays = days
+    .filter(d => d.calories > 0)
+    .map(d => ({
+      label: new Date(d.date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }),
+      net: Math.round(d.calories - d.burned),
+      deficit: Math.round(goals.calories - (d.calories - d.burned)),
+    }))
+  const totalDeficit = deficitDays.reduce((s, d) => s + d.deficit, 0)
+
   return (
     <div className="page">
       <h1>Historique</h1>
@@ -222,6 +231,32 @@ export default function History({ userId }) {
         <h2 className="hist-title">Calories nettes <span className="hist-goal">objectif {goals.calories} kcal</span></h2>
         <BarChart data={calData} color="var(--cal)" goal={goals.calories} period={period} />
       </div>
+
+      {deficitDays.length > 0 && (
+        <div className="hist-section">
+          <h2 className="hist-title">
+            Déficit cumulé
+            <span className="hist-goal">objectif {goals.calories} kcal/j</span>
+          </h2>
+          <div className={`deficit-total ${totalDeficit >= 0 ? 'deficit-positive' : 'deficit-negative'}`}>
+            {totalDeficit >= 0 ? '−' : '+'}{Math.abs(totalDeficit)} kcal
+            <span className="deficit-total-label">
+              {totalDeficit >= 0 ? 'déficit cumulé' : 'excédent cumulé'}
+            </span>
+          </div>
+          <div className="deficit-rows">
+            {deficitDays.map((d, i) => (
+              <div key={i} className="deficit-row">
+                <span className="deficit-day">{d.label}</span>
+                <span className="deficit-net">{d.net} kcal net</span>
+                <span className={`deficit-val ${d.deficit >= 0 ? 'deficit-positive' : 'deficit-negative'}`}>
+                  {d.deficit >= 0 ? '−' : '+'}{Math.abs(d.deficit)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="hist-section">
         <h2 className="hist-title">Protéines <span className="hist-goal">objectif {goals.proteins} g</span></h2>
