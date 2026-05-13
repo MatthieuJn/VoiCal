@@ -3,6 +3,16 @@ import { supabase } from '../lib/supabase'
 
 const DAY_FULL = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
 
+const ACTIVITY_EMOJIS = {
+  muscu_salle:     '🏋️',
+  muscu_pdc:       '🏋️',
+  muscu_avantbras: '🏋️',
+  velo:            '🚴',
+  marche:          '🚶',
+  course:          '🏃',
+  autre:           '⚡',
+}
+
 function localToday() {
   const n = new Date()
   return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`
@@ -174,7 +184,7 @@ export default function History({ userId }) {
     const [{ data: goalsData }, { data: meals }, { data: activities }, { data: weights }] = await Promise.all([
       supabase.from('user_goals').select('calories,proteins').eq('user_id', userId).maybeSingle(),
       supabase.from('meals').select('date,calories,proteins').eq('user_id', userId).gte('date', startDate).order('date'),
-      supabase.from('activities').select('date,name,calories_burned').eq('user_id', userId).gte('date', startDate).order('date'),
+      supabase.from('activities').select('date,name,calories_burned,type').eq('user_id', userId).gte('date', startDate).order('date'),
       supabase.from('weight_logs').select('date,weight,bedtime,wakeup').eq('user_id', userId).gte('date', startDate).order('date'),
     ])
 
@@ -216,6 +226,7 @@ export default function History({ userId }) {
         burned: Math.round(d.burned),
         proteins: Math.round(d.proteins),
         deficit: Math.round(goals.calories - (d.calories - d.burned)),
+        activityEmojis: [...new Set(d.activities.map(a => ACTIVITY_EMOJIS[a.type] || '⚡'))],
       }
     })
   const totalDeficit = deficitDays.reduce((s, d) => s + d.deficit, 0)
@@ -259,7 +270,11 @@ export default function History({ userId }) {
                   <span className="deficit-day">{d.label}</span>
                   <span className="deficit-proteins">P{d.proteins}</span>
                   <span className="deficit-eaten">▲ {d.consumed}</span>
-                  {d.burned > 0 && <span className="deficit-burned">▼ {d.burned}</span>}
+                  {d.burned > 0 && (
+                    <span className="deficit-burned">
+                      ▼ {d.burned}{d.activityEmojis.length > 0 && <span className="activity-emojis">{d.activityEmojis.join('')}</span>}
+                    </span>
+                  )}
                   <span className={`deficit-val ${d.deficit >= 0 ? 'deficit-positive' : 'deficit-negative'}`}>
                     {d.deficit >= 0 ? '−' : '+'}{Math.abs(d.deficit)}
                   </span>

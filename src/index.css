@@ -922,6 +922,13 @@ section { margin-bottom: 24px; }
   font-size: 12px;
   font-weight: 600;
   min-width: 54px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.activity-emojis {
+  font-size: 13px;
+  line-height: 1;
 }
 .deficit-val {
   font-weight: 600;
