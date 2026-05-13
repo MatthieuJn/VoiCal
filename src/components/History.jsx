@@ -206,11 +206,17 @@ export default function History({ userId }) {
 
   const deficitDays = days
     .filter(d => d.calories > 0)
-    .map(d => ({
-      label: new Date(d.date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }),
-      net: Math.round(d.calories - d.burned),
-      deficit: Math.round(goals.calories - (d.calories - d.burned)),
-    }))
+    .map(d => {
+      const dt = new Date(d.date + 'T12:00:00')
+      return {
+        date: d.date,
+        isMonday: dt.getDay() === 1,
+        label: dt.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }),
+        consumed: Math.round(d.calories),
+        burned: Math.round(d.burned),
+        deficit: Math.round(goals.calories - (d.calories - d.burned)),
+      }
+    })
   const totalDeficit = deficitDays.reduce((s, d) => s + d.deficit, 0)
 
   return (
@@ -246,12 +252,16 @@ export default function History({ userId }) {
           </div>
           <div className="deficit-rows">
             {deficitDays.map((d, i) => (
-              <div key={i} className="deficit-row">
-                <span className="deficit-day">{d.label}</span>
-                <span className="deficit-net">{d.net} kcal net</span>
-                <span className={`deficit-val ${d.deficit >= 0 ? 'deficit-positive' : 'deficit-negative'}`}>
-                  {d.deficit >= 0 ? '−' : '+'}{Math.abs(d.deficit)}
-                </span>
+              <div key={i}>
+                {d.isMonday && i > 0 && <div className="week-separator" />}
+                <div className="deficit-row">
+                  <span className="deficit-day">{d.label}</span>
+                  <span className="deficit-eaten">▲ {d.consumed}</span>
+                  {d.burned > 0 && <span className="deficit-burned">▼ {d.burned}</span>}
+                  <span className={`deficit-val ${d.deficit >= 0 ? 'deficit-positive' : 'deficit-negative'}`}>
+                    {d.deficit >= 0 ? '−' : '+'}{Math.abs(d.deficit)}
+                  </span>
+                </div>
               </div>
             ))}
           </div>

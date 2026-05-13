@@ -420,6 +420,12 @@ export default function Dashboard({ userId }) {
             <button className="btn-delete" onClick={e => { e.stopPropagation(); deleteMeal(m.id) }}>×</button>
           </div>
         ))}
+        {meals.length > 0 && (
+          <div className="meals-total">
+            <span>Total ingéré</span>
+            <strong>{Math.round(totals.calories)} kcal</strong>
+          </div>
+        )}
       </section>
 
       <section>

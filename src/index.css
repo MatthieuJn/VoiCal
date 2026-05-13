@@ -316,6 +316,18 @@ section { margin-bottom: 24px; }
 
 .empty { color: var(--text-muted); font-size: 14px; padding: 8px 0; }
 
+.meals-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 4px 2px;
+  font-size: 13px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+}
+.meals-total strong { color: var(--cal); font-size: 15px; }
+
 /* Parse preview */
 .textarea-wrap {
   position: relative;
@@ -869,20 +881,45 @@ section { margin-bottom: 24px; }
   gap: 8px;
   font-size: 13px;
 }
+.week-separator {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 0;
+  position: relative;
+}
+.week-separator::before {
+  content: 'Lun';
+  position: absolute;
+  right: 0;
+  top: -8px;
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
 .deficit-day {
-  width: 72px;
+  width: 64px;
   color: var(--text-muted);
   text-transform: capitalize;
   flex-shrink: 0;
+  font-size: 12px;
 }
-.deficit-net {
-  flex: 1;
-  color: var(--text-muted);
+.deficit-eaten {
+  color: var(--cal);
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 54px;
+}
+.deficit-burned {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 54px;
 }
 .deficit-val {
   font-weight: 600;
-  font-size: 14px;
-  min-width: 60px;
+  font-size: 13px;
+  min-width: 52px;
   text-align: right;
 }
 
