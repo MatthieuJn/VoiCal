@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { parseMealInput } from '../lib/parser'
-import { analyzeMeal, analyzeMealFromPhoto, recalculateMeal, computeTotals, GEMINI_MODEL } from '../lib/gemini'
+import { analyzeMeal, analyzeMealFromPhoto, recalculateMeal, computeTotals, analyzeActivity, GEMINI_MODEL } from '../lib/gemini'
 import Gauge from './Gauge'
 
 const DEFAULT_GOALS = { calories: 2000, proteins: 150, carbs: 200, fats: 70, fibers: 30 }
@@ -18,6 +18,16 @@ const ACTIVITY_TYPES = [
 
 const CARDIO_TYPES = ['velo', 'marche']
 
+const BIRTH_DATE = new Date('1997-06-20')
+const USER_HEIGHT_CM = 187
+function getUserAge() {
+  const today = new Date()
+  let age = today.getFullYear() - BIRTH_DATE.getFullYear()
+  const m = today.getMonth() - BIRTH_DATE.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < BIRTH_DATE.getDate())) age--
+  return age
+}
+
 export default function Dashboard({ userId }) {
   const [meals, setMeals] = useState([])
   const [activities, setActivities] = useState([])
@@ -26,6 +36,8 @@ export default function Dashboard({ userId }) {
   const [savedWeight, setSavedWeight] = useState(null)
   const [bedtime, setBedtime] = useState('')
   const [savedBedtime, setSavedBedtime] = useState(null)
+  const [wakeup, setWakeup] = useState('')
+  const [savedWakeup, setSavedWakeup] = useState(null)
   const [showMealModal, setShowMealModal] = useState(false)
   const [showActivityModal, setShowActivityModal] = useState(false)
   const [showTemplate, setShowTemplate] = useState(false)
@@ -46,6 +58,12 @@ export default function Dashboard({ userId }) {
   const [activityType, setActivityType] = useState('muscu_salle')
   const [activityCalories, setActivityCalories] = useState('')
   const [activityDuration, setActivityDuration] = useState('')
+  const [activityInput, setActivityInput] = useState('')
+  const [activityListening, setActivityListening] = useState(false)
+  const [activityAiLoading, setActivityAiLoading] = useState(false)
+  const [activityAiError, setActivityAiError] = useState('')
+  const [activityAiResult, setActivityAiResult] = useState(null)
+  const activityRecRef = useRef(null)
 
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -81,7 +99,7 @@ export default function Dashboard({ userId }) {
     setActivities(a || [])
 
     const { data: w } = await supabase.from('weight_logs').select('weight,bedtime').eq('user_id', userId).eq('date', selectedDate).maybeSingle()
-    if (w) { setSavedWeight(w.weight); setSavedBedtime(w.bedtime || null) }
+    if (w) { setSavedWeight(w.weight); setSavedBedtime(w.bedtime || null); setSavedWakeup(w.wakeup || null) }
   }
 
   const totals = meals.reduce((acc, m) => ({
@@ -223,6 +241,55 @@ export default function Dashboard({ userId }) {
     loadData()
   }
 
+  function startActivityListening() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) { alert('Reconnaissance vocale non supportée sur ce navigateur.'); return }
+    const rec = new SR()
+    rec.lang = 'fr-FR'
+    rec.continuous = false
+    rec.interimResults = false
+    rec.onstart = () => setActivityListening(true)
+    rec.onend   = () => setActivityListening(false)
+    rec.onerror = () => setActivityListening(false)
+    rec.onresult = e => {
+      const transcript = e.results[0][0].transcript
+      setActivityInput(prev => prev ? prev + ' ' + transcript : transcript)
+    }
+    rec.start()
+    activityRecRef.current = rec
+  }
+
+  function stopActivityListening() {
+    activityRecRef.current?.stop()
+    setActivityListening(false)
+  }
+
+  async function analyzeActivityWithAI() {
+    if (!activityInput.trim()) return
+    setActivityAiLoading(true)
+    setActivityAiError('')
+    setActivityAiResult(null)
+    try {
+      const result = await analyzeActivity(activityInput, savedWeight, getUserAge(), USER_HEIGHT_CM)
+      setActivityAiResult(result)
+      if (result.name && !activityName) setActivityName(result.name)
+      setActivityCalories(String(result.net_calories))
+    } catch {
+      setActivityAiError('Erreur Gemini. Vérifie ta clé API.')
+    }
+    setActivityAiLoading(false)
+  }
+
+  function resetActivityModal() {
+    setShowActivityModal(false)
+    setActivityName('')
+    setActivityCalories('')
+    setActivityDuration('')
+    setActivityInput('')
+    setActivityAiResult(null)
+    setActivityAiError('')
+  }
+
   async function addActivity() {
     if (!activityName || !activityCalories) return
     const isCardio = CARDIO_TYPES.includes(activityType)
@@ -235,8 +302,7 @@ export default function Dashboard({ userId }) {
       name: activityName, type: activityType,
       calories_burned: Math.round(net),
     })
-    setShowActivityModal(false)
-    setActivityName(''); setActivityCalories(''); setActivityDuration('')
+    resetActivityModal()
     loadData()
   }
 
@@ -262,14 +328,26 @@ export default function Dashboard({ userId }) {
 
   async function saveBedtime() {
     if (!bedtime) return
-    const payload = { user_id: userId, date: selectedDate, bedtime }
+    const payload = { user_id: userId, date: selectedDate, bedtime, ...(savedWakeup ? { wakeup: savedWakeup } : {}) }
     let { error } = await supabase.from('weight_logs').upsert(payload, { onConflict: 'user_id,date' })
     if (error) {
-      const { bedtime: _b, ...fallback } = payload
+      const { bedtime: _b, wakeup: _w, ...fallback } = payload
       await supabase.from('weight_logs').upsert(fallback, { onConflict: 'user_id,date' })
     }
     setSavedBedtime(bedtime)
     setBedtime('')
+  }
+
+  async function saveWakeup() {
+    if (!wakeup) return
+    const payload = { user_id: userId, date: selectedDate, wakeup, ...(savedBedtime ? { bedtime: savedBedtime } : {}) }
+    let { error } = await supabase.from('weight_logs').upsert(payload, { onConflict: 'user_id,date' })
+    if (error) {
+      const { wakeup: _w, bedtime: _b, ...fallback } = payload
+      await supabase.from('weight_logs').upsert(fallback, { onConflict: 'user_id,date' })
+    }
+    setSavedWakeup(wakeup)
+    setWakeup('')
   }
 
   const isToday = selectedDate === today
@@ -335,17 +413,25 @@ export default function Dashboard({ userId }) {
 
       <section>
         <div className="section-header">
-          <h2>Coucher</h2>
+          <h2>Sommeil</h2>
         </div>
-        <div className="weight-row">
-          {savedBedtime && <span className="weight-saved">🌙 <strong>{savedBedtime.slice(0,5)}</strong></span>}
-          <input
-            type="time"
-            value={bedtime}
-            onChange={e => setBedtime(e.target.value)}
-            className="input input-small"
-          />
-          <button className="btn-add" onClick={saveBedtime}>Enregistrer</button>
+        <div className="sleep-row">
+          <div className="sleep-field">
+            <span className="sleep-label">🌙 Coucher</span>
+            {savedBedtime && <span className="sleep-saved">{savedBedtime.slice(0,5)}</span>}
+            <div className="sleep-input-row">
+              <input type="time" value={bedtime} onChange={e => setBedtime(e.target.value)} className="input input-small" />
+              <button className="btn-add" onClick={saveBedtime}>OK</button>
+            </div>
+          </div>
+          <div className="sleep-field">
+            <span className="sleep-label">☀️ Lever</span>
+            {savedWakeup && <span className="sleep-saved">{savedWakeup.slice(0,5)}</span>}
+            <div className="sleep-input-row">
+              <input type="time" value={wakeup} onChange={e => setWakeup(e.target.value)} className="input input-small" />
+              <button className="btn-add" onClick={saveWakeup}>OK</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -572,28 +658,54 @@ export default function Dashboard({ userId }) {
       )}
 
       {showActivityModal && (
-        <div className="modal-overlay" onClick={() => setShowActivityModal(false)}>
+        <div className="modal-overlay" onClick={resetActivityModal}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h3>Ajouter une activité</h3>
+
+            <div className="textarea-wrap">
+              <textarea
+                placeholder="Décris ta séance… (ex: 45 min de vélo en côte, rythme modéré)"
+                value={activityInput}
+                onChange={e => { setActivityInput(e.target.value); setActivityAiResult(null) }}
+                className="textarea" rows={3}
+              />
+              <button
+                className={`btn-mic ${activityListening ? 'active' : ''}`}
+                onClick={activityListening ? stopActivityListening : startActivityListening}
+                title={activityListening ? 'Arrêter' : 'Dicter'}
+              >
+                {activityListening ? '⏹' : '🎙️'}
+              </button>
+            </div>
+
+            <button className="btn-ai" onClick={analyzeActivityWithAI}
+              disabled={activityAiLoading || !activityInput.trim()}>
+              {activityAiLoading ? 'Analyse en cours…' : '✨ Estimer les calories avec Gemini'}
+            </button>
+            {!savedWeight && <p className="ai-error" style={{ fontSize: 12 }}>⚠ Poids du jour non renseigné — estimation moins précise</p>}
+
+            {activityAiError && <p className="ai-error">{activityAiError}</p>}
+
+            {activityAiResult && (
+              <div className="parse-preview">
+                ✨ {activityAiResult.net_calories} kcal net
+                {activityAiResult.notes && <span style={{ color: 'var(--text-muted)', fontSize: 11, display: 'block', marginTop: 4 }}>{activityAiResult.notes}</span>}
+              </div>
+            )}
+
             <input placeholder="Nom (ex: Séance dos, Balade du soir…)" value={activityName}
               onChange={e => setActivityName(e.target.value)} className="input" />
             <select value={activityType} onChange={e => { setActivityType(e.target.value); setActivityDuration('') }} className="input">
               {ACTIVITY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
-            <input type="number" placeholder="Calories brûlées (kcal, total appareil)" value={activityCalories}
+            <input type="number" placeholder="Calories nettes (kcal)" value={activityCalories}
               onChange={e => setActivityCalories(e.target.value)} className="input" />
             {CARDIO_TYPES.includes(activityType) && (
               <input type="number" placeholder="Durée (minutes)" value={activityDuration}
                 onChange={e => setActivityDuration(e.target.value)} className="input" />
             )}
-            {CARDIO_TYPES.includes(activityType) && activityCalories && activityDuration && (
-              <div className="parse-preview">
-                ✓ Net : {Math.round(Math.max(0, parseFloat(activityCalories) - (80 * parseFloat(activityDuration) / 60)))} kcal
-                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}> (−{Math.round(80 * parseFloat(activityDuration) / 60)} kcal repos)</span>
-              </div>
-            )}
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setShowActivityModal(false)}>Annuler</button>
+              <button className="btn-secondary" onClick={resetActivityModal}>Annuler</button>
               <button className="btn-primary" onClick={addActivity}>Enregistrer</button>
             </div>
           </div>

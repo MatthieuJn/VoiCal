@@ -727,6 +727,36 @@ section { margin-bottom: 24px; }
   font-weight: 600;
 }
 
+/* ── Sleep section ── */
+.sleep-row {
+  display: flex;
+  gap: 12px;
+}
+
+.sleep-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sleep-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.sleep-saved {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.sleep-input-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
 .btn-remove-photo {
   position: absolute;
   top: 8px;
@@ -762,6 +792,12 @@ section { margin-bottom: 24px; }
   font-size: 11px;
   color: var(--text-muted);
   font-weight: 400;
+}
+
+.chart-tooltip {
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: 4px;
 }
 
 .chart-empty {

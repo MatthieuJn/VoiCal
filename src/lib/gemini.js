@@ -80,6 +80,39 @@ Réponds UNIQUEMENT avec un objet JSON valide, sans markdown :
   return { ...parsed, totals: computeTotals(parsed.ingredients) }
 }
 
+export async function analyzeActivity(description, weightKg, ageYears, heightCm) {
+  const weightLine = weightKg ? `- Poids : ${weightKg} kg` : `- Poids : inconnu (utilise 80 kg par défaut)`
+  const prompt = `Tu es un expert en physiologie sportive. L'utilisateur décrit une séance sportive.
+Données physiques :
+${weightLine}
+- Âge : ${ageYears} ans
+- Taille : ${heightCm} cm
+
+Calcule les calories NETTES brûlées, c'est-à-dire :
+  calories nettes = calories brûlées pendant l'activité − calories brûlées en étant assis au bureau pendant la même durée
+(car ces calories auraient été brûlées de toute façon au repos)
+
+Réponds UNIQUEMENT avec un objet JSON valide, sans markdown :
+{
+  "name": "<nom court de l'activité, 2-4 mots>",
+  "net_calories": <nombre entier, calories nettes>,
+  "duration_min": <durée estimée en minutes>,
+  "notes": "<explication courte : ex. '45 min vélo modéré, ~350 kcal brut − 60 kcal repos = 290 kcal net'>"
+}
+
+Description : "${description}"`
+
+  const response = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: prompt,
+  })
+
+  const raw = response.text
+  const jsonMatch = raw.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error('Réponse invalide de Gemini')
+  return JSON.parse(jsonMatch[0])
+}
+
 export async function recalculateMeal(ingredients, originalText) {
   const list = ingredients.map(ing =>
     `- ${ing.name} : ${ing.quantity_g}g | ${ing.kcal_per_100g} kcal/100g | P:${ing.proteins_per_100g} G:${ing.carbs_per_100g} L:${ing.fats_per_100g} F:${ing.fibers_per_100g} (g/100g)`
