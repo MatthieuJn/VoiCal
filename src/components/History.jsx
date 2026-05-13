@@ -11,7 +11,27 @@ const ACTIVITY_EMOJIS = {
   marche:          '🚶',
   course:          '🏃',
   escalade:        '🧗',
-  autre:           '⚡',
+  autre:           null,
+}
+
+const NAME_KEYWORDS = [
+  { words: ['course', 'run', 'courir', 'footing', 'sprint'], emoji: '🏃' },
+  { words: ['muscu', 'musculation', 'haltère', 'salle', 'force'], emoji: '🏋️' },
+  { words: ['vélo', 'velo', 'cyclisme', 'bike', 'cycling'], emoji: '🚴' },
+  { words: ['escalade', 'grimpe', 'bloc', 'climbing'], emoji: '🧗' },
+  { words: ['marche', 'walk', 'randonnée', 'rando'], emoji: '🚶' },
+  { words: ['natation', 'nage', 'piscine', 'swim'], emoji: '🏊' },
+]
+
+function emojisForActivity(type, name) {
+  const set = new Set()
+  const typeEmoji = ACTIVITY_EMOJIS[type]
+  if (typeEmoji) set.add(typeEmoji)
+  const lower = (name || '').toLowerCase()
+  for (const { words, emoji } of NAME_KEYWORDS) {
+    if (words.some(w => lower.includes(w))) set.add(emoji)
+  }
+  return [...set]
 }
 
 function localToday() {
@@ -105,7 +125,7 @@ function BarChart({ data, color, goal, period }) {
   )
 }
 
-function LineChart({ data, color, unit = '', period }) {
+function LineChart({ data, color, unit = '', period, showValues = false }) {
   const [sel, setSel] = useState(null)
   if (!data.length) return <p className="chart-empty">Pas de données</p>
   if (data.length === 1) return (
@@ -119,7 +139,8 @@ function LineChart({ data, color, unit = '', period }) {
   const range = max - min || 1
   const isWeek = period === 'week'
   const W = 320, H = 80
-  const labelH = isWeek ? 38 : 16
+  const valueH = showValues ? 16 : 0
+  const labelH = (isWeek ? 38 : 16) + valueH
   const count = data.length
 
   const pts = data.map((d, i) => ({
@@ -145,7 +166,12 @@ function LineChart({ data, color, unit = '', period }) {
           return (
             <g key={i} onClick={() => setSel(sel === i ? null : i)} style={{ cursor: 'pointer' }}>
               <circle cx={p.x} cy={p.y} r={isSel ? 5 : 3} fill={color} />
-              {isSel && (
+              {showValues && (
+                <text x={p.x} y={p.y - 7} textAnchor="middle" fontSize={9} fontWeight="bold" fill={color}>
+                  {p.value}{unit}
+                </text>
+              )}
+              {!showValues && isSel && (
                 <text x={p.x} y={p.y - 9} textAnchor="middle" fontSize={9} fontWeight="bold" fill={color}>
                   {p.value}{unit}
                 </text>
@@ -170,7 +196,7 @@ function LineChart({ data, color, unit = '', period }) {
   )
 }
 
-export default function History({ userId }) {
+export default function History({ userId, onGoToDay }) {
   const [period, setPeriod] = useState('week')
   const [days, setDays] = useState([])
   const [goals, setGoals] = useState({ calories: 2000, proteins: 150 })
@@ -186,7 +212,7 @@ export default function History({ userId }) {
       supabase.from('user_goals').select('calories,proteins').eq('user_id', userId).maybeSingle(),
       supabase.from('meals').select('date,calories,proteins').eq('user_id', userId).gte('date', startDate).order('date'),
       supabase.from('activities').select('date,name,calories_burned,type').eq('user_id', userId).gte('date', startDate).order('date'),
-      supabase.from('weight_logs').select('date,weight,bedtime,wakeup').eq('user_id', userId).gte('date', startDate).order('date'),
+      supabase.from('weight_logs').select('*').eq('user_id', userId).gte('date', startDate).order('date'),
     ])
 
     if (goalsData) setGoals(goalsData)
@@ -209,7 +235,7 @@ export default function History({ userId }) {
 
   const calData    = days.map(d => ({ label: dayLabel(d.date, period), value: Math.max(0, Math.round(d.calories - d.burned)) }))
   const protData   = days.map(d => ({ label: dayLabel(d.date, period), value: Math.round(d.proteins) }))
-  const weightData = days.filter(d => d.weight !== null).map(d => ({ label: dayLabel(d.date, period), value: d.weight }))
+  const weightData = days.filter(d => d.weight !== null).map(d => ({ label: dayLabel(d.date, period), value: d.weight, date: d.date }))
   const sleepData  = days
     .map(d => ({ label: dayLabel(d.date, period), value: sleepDuration(d.bedtime, d.wakeup) }))
     .filter(d => d.value !== null)
@@ -227,10 +253,35 @@ export default function History({ userId }) {
         burned: Math.round(d.burned),
         proteins: Math.round(d.proteins),
         deficit: Math.round(goals.calories - (d.calories - d.burned)),
-        activityEmojis: [...new Set(d.activities.map(a => ACTIVITY_EMOJIS[a.type] || '⚡'))],
+        activityEmojis: [...new Set(d.activities.flatMap(a => emojisForActivity(a.type, a.name)))],
       }
     })
-  const totalDeficit = deficitDays.reduce((s, d) => s + d.deficit, 0)
+  const today = localToday()
+  const todayDt = new Date(today + 'T12:00:00')
+  const dayOfWeek = todayDt.getDay()
+  const daysToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+  const weekStart = shiftDate(today, daysToMon)
+
+  const displayedDays = period === 'week'
+    ? deficitDays.filter(d => d.date >= weekStart)
+    : deficitDays
+  const totalDeficit = displayedDays.reduce((s, d) => s + d.deficit, 0)
+
+  const weekTotalByDate = {}
+  let currentGroup = []
+  for (let i = 0; i < deficitDays.length; i++) {
+    const d = deficitDays[i]
+    if (d.isMonday && currentGroup.length > 0) {
+      const total = currentGroup.reduce((s, x) => s + x.deficit, 0)
+      weekTotalByDate[currentGroup[currentGroup.length - 1].date] = total
+      currentGroup = []
+    }
+    currentGroup.push(d)
+  }
+  if (currentGroup.length > 0) {
+    const total = currentGroup.reduce((s, x) => s + x.deficit, 0)
+    weekTotalByDate[currentGroup[currentGroup.length - 1].date] = total
+  }
 
   return (
     <div className="page">
@@ -242,13 +293,21 @@ export default function History({ userId }) {
       </div>
 
       <div className="hist-section">
-        <h2 className="hist-title">Poids</h2>
-        <LineChart data={weightData} color="var(--cal)" unit=" kg" period={period} />
-      </div>
-
-      <div className="hist-section">
-        <h2 className="hist-title">Calories nettes <span className="hist-goal">objectif {goals.calories} kcal</span></h2>
-        <BarChart data={calData} color="var(--cal)" goal={goals.calories} period={period} />
+        <h2 className="hist-title">
+          Poids
+          {weightData.length >= 2 && (() => {
+            const delta = (weightData[weightData.length - 1].value - weightData[0].value).toFixed(1)
+            const lost = -delta
+            const firstDt = new Date(weightData[0].date + 'T12:00:00')
+            const since = `${String(firstDt.getDate()).padStart(2,'0')}/${String(firstDt.getMonth()+1).padStart(2,'0')}/${String(firstDt.getFullYear()).slice(-2)}`
+            return (
+              <span className={`weight-delta ${lost > 0 ? 'deficit-positive' : lost < 0 ? 'deficit-negative' : ''}`}>
+                {lost > 0 ? `−${lost} kg` : lost < 0 ? `+${Math.abs(lost)} kg` : '= stable'} depuis le {since}
+              </span>
+            )
+          })()}
+        </h2>
+        <LineChart data={weightData} color="var(--cal)" unit=" kg" period={period} showValues />
       </div>
 
       {deficitDays.length > 0 && (
@@ -264,55 +323,38 @@ export default function History({ userId }) {
             </span>
           </div>
           <div className="deficit-rows">
-            {deficitDays.map((d, i) => (
-              <div key={i}>
-                {d.isMonday && i > 0 && <div className="week-separator" />}
-                <div className="deficit-row">
-                  <span className="deficit-day">{d.label}</span>
-                  <span className="deficit-proteins">P{d.proteins}</span>
-                  <span className="deficit-eaten">▲ {d.consumed}</span>
-                  {d.burned > 0 && (
+            {deficitDays.map((d, i) => {
+              const weekTotal = weekTotalByDate[d.date]
+              return (
+                <div key={i}>
+                  {d.isMonday && i > 0 && <div className="week-separator" />}
+                  <div className="deficit-row">
+                    <span className="deficit-day deficit-day-link" onClick={() => onGoToDay?.(d.date)}>{d.label}</span>
+                    <span className="deficit-proteins">P{d.proteins}</span>
+                    <span className="deficit-eaten">▲ {d.consumed}</span>
                     <span className="deficit-burned">
-                      ▼ {d.burned}{d.activityEmojis.length > 0 && <span className="activity-emojis">{d.activityEmojis.join('')}</span>}
+                      {d.burned > 0 ? <>▼ {d.burned}{d.activityEmojis.length > 0 && <span className="activity-emojis">{d.activityEmojis.join('')}</span>}</> : null}
                     </span>
-                  )}
-                  <span className={`deficit-val ${d.deficit >= 0 ? 'deficit-positive' : 'deficit-negative'}`}>
-                    {d.deficit >= 0 ? '−' : '+'}{Math.abs(d.deficit)}
-                  </span>
+                    <span className={`deficit-val ${d.deficit >= 0 ? 'deficit-positive' : 'deficit-negative'}`}>
+                      {d.deficit >= 0 ? '−' : '+'}{Math.abs(d.deficit)}
+                    </span>
+                    {weekTotal !== undefined ? (
+                      <span className={`deficit-week-total ${weekTotal >= 0 ? 'deficit-positive' : 'deficit-negative'}`}>
+                        <span className="deficit-week-total-label">{d.date >= weekStart ? 'sem. actuelle' : 'sem. passée'}</span>
+                        {weekTotal >= 0 ? '−' : '+'}{Math.abs(weekTotal)}
+                      </span>
+                    ) : <span />}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
 
       <div className="hist-section">
-        <h2 className="hist-title">Protéines <span className="hist-goal">objectif {goals.proteins} g</span></h2>
-        <BarChart data={protData} color="var(--prot)" goal={goals.proteins} period={period} />
-      </div>
-
-      <div className="hist-section">
         <h2 className="hist-title">Sommeil <span className="hist-goal">heures / nuit</span></h2>
         <BarChart data={sleepData} color="#5e5ce6" period={period} />
-      </div>
-
-      <div className="hist-section">
-        <h2 className="hist-title">Activité sportive</h2>
-        {actDays.length === 0
-          ? <p className="empty">Aucune activité sur cette période</p>
-          : actDays.map(d => (
-            <div key={d.date} className="activity-day">
-              <span className="activity-day-date">
-                {new Date(d.date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
-              </span>
-              <div>
-                {d.activities.map((a, i) => (
-                  <span key={i} className="activity-tag">🏃 {a.name} −{Math.round(a.calories_burned)} kcal</span>
-                ))}
-              </div>
-            </div>
-          ))
-        }
       </div>
     </div>
   )

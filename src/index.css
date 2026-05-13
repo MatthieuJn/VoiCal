@@ -876,10 +876,27 @@ section { margin-bottom: 24px; }
   margin-top: 8px;
 }
 .deficit-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 58px 34px 72px 80px 52px auto;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  font-size: 12px;
+}
+.deficit-week-total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding-left: 4px;
+}
+.deficit-week-total-label {
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
 }
 .week-separator {
   height: 1px;
@@ -898,42 +915,42 @@ section { margin-bottom: 24px; }
   letter-spacing: 1px;
 }
 .deficit-day {
-  width: 64px;
   color: var(--text-muted);
   text-transform: capitalize;
-  flex-shrink: 0;
-  font-size: 12px;
 }
+.weight-delta {
+  font-size: 13px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+.deficit-day-link {
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+.deficit-day-link:hover { color: var(--text); }
 .deficit-proteins {
   color: var(--prot);
   font-size: 11px;
   font-weight: 700;
-  min-width: 36px;
-  flex-shrink: 0;
 }
 .deficit-eaten {
   color: var(--cal);
-  font-size: 12px;
   font-weight: 600;
-  min-width: 54px;
 }
 .deficit-burned {
   color: var(--accent);
-  font-size: 12px;
   font-weight: 600;
-  min-width: 54px;
   display: flex;
   align-items: center;
   gap: 3px;
 }
 .activity-emojis {
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1;
 }
 .deficit-val {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 13px;
-  min-width: 52px;
   text-align: right;
 }
 
@@ -955,3 +972,27 @@ section { margin-bottom: 24px; }
 }
 
 .setting-unit { font-size: 13px; color: var(--text-muted); }
+
+.setting-age {
+  font-size: 12px;
+  color: var(--accent);
+  margin: -4px 0 8px 0;
+}
+.maint-estimate {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(48, 209, 88, 0.12);
+  padding: 2px 7px;
+  border-radius: 8px;
+}
+.maint-info-result {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 0;
+}
+.maint-confidence {
+  font-size: 12px;
+  color: var(--text-muted);
+}

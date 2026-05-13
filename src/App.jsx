@@ -9,6 +9,12 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('today')
+  const [navDate, setNavDate] = useState(null)
+
+  function goToDay(date) {
+    setNavDate(date)
+    setTab('today')
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -27,8 +33,8 @@ export default function App() {
   return (
     <div className="app">
       <main className="main-content">
-        {tab === 'today'    && <Dashboard userId={session.user.id} />}
-        {tab === 'history'  && <History   userId={session.user.id} />}
+        {tab === 'today'    && <Dashboard userId={session.user.id} initialDate={navDate} />}
+        {tab === 'history'  && <History   userId={session.user.id} onGoToDay={goToDay} />}
         {tab === 'settings' && <Settings  userId={session.user.id} />}
       </main>
 

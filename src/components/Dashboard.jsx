@@ -29,7 +29,7 @@ function getUserAge() {
   return age
 }
 
-export default function Dashboard({ userId }) {
+export default function Dashboard({ userId, initialDate }) {
   const [meals, setMeals] = useState([])
   const [activities, setActivities] = useState([])
   const [goals, setGoals] = useState(DEFAULT_GOALS)
@@ -71,7 +71,9 @@ export default function Dashboard({ userId }) {
 
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-  const [selectedDate, setSelectedDate] = useState(today)
+  const [selectedDate, setSelectedDate] = useState(initialDate || today)
+
+  useEffect(() => { if (initialDate) setSelectedDate(initialDate) }, [initialDate])
 
   useEffect(() => { loadData() }, [userId, selectedDate])
 
@@ -102,8 +104,9 @@ export default function Dashboard({ userId }) {
     const { data: a } = await supabase.from('activities').select('*').eq('user_id', userId).eq('date', selectedDate).order('created_at')
     setActivities(a || [])
 
-    const { data: w } = await supabase.from('weight_logs').select('weight,bedtime').eq('user_id', userId).eq('date', selectedDate).maybeSingle()
+    const { data: w } = await supabase.from('weight_logs').select('*').eq('user_id', userId).eq('date', selectedDate).maybeSingle()
     if (w) { setSavedWeight(w.weight); setSavedBedtime(w.bedtime || null); setSavedWakeup(w.wakeup || null) }
+    else { setSavedWeight(null); setSavedBedtime(null); setSavedWakeup(null) }
   }
 
   const totals = meals.reduce((acc, m) => ({
@@ -487,6 +490,12 @@ export default function Dashboard({ userId }) {
             <button className="btn-delete" onClick={() => deleteActivity(a.id)}>×</button>
           </div>
         ))}
+        {activities.length > 0 && (
+          <div className="meals-total">
+            <span>Total brûlé</span>
+            <strong style={{ color: 'var(--accent)' }}>−{Math.round(burnedCalories)} kcal</strong>
+          </div>
+        )}
       </section>
 
       {showMealModal && (
