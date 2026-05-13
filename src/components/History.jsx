@@ -10,6 +10,7 @@ const ACTIVITY_EMOJIS = {
   velo:            '🚴',
   marche:          '🚶',
   course:          '🏃',
+  escalade:        '🧗',
   autre:           '⚡',
 }
 

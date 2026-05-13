@@ -13,6 +13,7 @@ const ACTIVITY_TYPES = [
   { value: 'velo',            label: 'Vélo' },
   { value: 'marche',          label: 'Marche' },
   { value: 'course',          label: 'Course' },
+  { value: 'escalade',        label: 'Escalade' },
   { value: 'autre',           label: 'Autre' },
 ]
 
