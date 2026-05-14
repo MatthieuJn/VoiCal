@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="8" fill="#1c1c1e"/>
+  <text
+    x="16" y="24"
+    text-anchor="middle"
+    font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif"
+    font-weight="800"
+    font-size="22"
+    letter-spacing="-1"
+    fill="#30d158"
+  >V</text>
+</svg>

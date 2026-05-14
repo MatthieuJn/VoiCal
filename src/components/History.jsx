@@ -125,7 +125,7 @@ function BarChart({ data, color, goal, period }) {
   )
 }
 
-function LineChart({ data, color, unit = '', period, showValues = false }) {
+function LineChart({ data, color, unit = '', period, showValues = false, markerBeforeIdx }) {
   const [sel, setSel] = useState(null)
   if (!data.length) return <p className="chart-empty">Pas de données</p>
   if (data.length === 1) return (
@@ -159,6 +159,13 @@ function LineChart({ data, color, unit = '', period, showValues = false }) {
         </p>
       )}
       <svg viewBox={`0 0 ${W} ${H + labelH}`} style={{ width: '100%' }}>
+        {markerBeforeIdx > 0 && pts[markerBeforeIdx] && pts[markerBeforeIdx - 1] && (() => {
+          const mx = (pts[markerBeforeIdx - 1].x + pts[markerBeforeIdx].x) / 2
+          return <>
+            <line x1={mx} y1={0} x2={mx} y2={H} stroke="var(--text-muted)" strokeWidth={1} strokeDasharray="4 3" strokeOpacity={0.6} />
+            <text x={mx + 3} y={10} fontSize={8} fill="var(--text-muted)" opacity={0.7}>Lun</text>
+          </>
+        })()}
         <path d={path} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" />
         {pts.map((p, i) => {
           const isSel = sel === i
@@ -196,10 +203,18 @@ function LineChart({ data, color, unit = '', period, showValues = false }) {
   )
 }
 
+const WEIGHT_DAY_NAMES = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
+function weightDayLabel(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00')
+  return `${WEIGHT_DAY_NAMES[d.getDay()]} ${d.getDate()}`
+}
+
 export default function History({ userId, onGoToDay }) {
   const [period, setPeriod] = useState('week')
   const [days, setDays] = useState([])
   const [goals, setGoals] = useState({ calories: 2000, proteins: 150 })
+  const [weightDays14, setWeightDays14] = useState([])
+  const [weightDeficit14, setWeightDeficit14] = useState(0)
 
   useEffect(() => { loadHistory() }, [period, userId])
 
@@ -207,12 +222,16 @@ export default function History({ userId, onGoToDay }) {
     const n = period === 'week' ? 7 : 30
     const today = localToday()
     const startDate = shiftDate(today, -(n - 1))
+    const weightStart14 = shiftDate(today, -13)
 
-    const [{ data: goalsData }, { data: meals }, { data: activities }, { data: weights }] = await Promise.all([
+    const [{ data: goalsData }, { data: meals }, { data: activities }, { data: weights }, { data: weights14 }, { data: meals14 }, { data: activities14 }] = await Promise.all([
       supabase.from('user_goals').select('calories,proteins').eq('user_id', userId).maybeSingle(),
       supabase.from('meals').select('date,calories,proteins').eq('user_id', userId).gte('date', startDate).order('date'),
       supabase.from('activities').select('date,name,calories_burned,type').eq('user_id', userId).gte('date', startDate).order('date'),
       supabase.from('weight_logs').select('*').eq('user_id', userId).gte('date', startDate).order('date'),
+      supabase.from('weight_logs').select('date,weight').eq('user_id', userId).gte('date', weightStart14).order('date'),
+      supabase.from('meals').select('date,calories').eq('user_id', userId).gte('date', weightStart14).order('date'),
+      supabase.from('activities').select('date,calories_burned').eq('user_id', userId).gte('date', weightStart14).order('date'),
     ])
 
     if (goalsData) setGoals(goalsData)
@@ -231,6 +250,19 @@ export default function History({ userId, onGoToDay }) {
     }
 
     setDays(range.map(date => ({ date, ...byDate[date] })))
+
+    const w14 = (weights14 || []).filter(w => w.weight !== null).map(w => ({ label: weightDayLabel(w.date), value: w.weight, date: w.date }))
+    setWeightDays14(w14)
+
+    // Déficit sur les 14 jours pour les boîtes du graphique poids
+    const caloriesByDate14 = {}
+    for (const m of (meals14 || [])) caloriesByDate14[m.date] = (caloriesByDate14[m.date] || 0) + (m.calories || 0)
+    const burnedByDate14 = {}
+    for (const a of (activities14 || [])) burnedByDate14[a.date] = (burnedByDate14[a.date] || 0) + (a.calories_burned || 0)
+    const deficit14 = Object.keys(caloriesByDate14).reduce((s, d) => {
+      return s + ((goalsData?.calories || 2000) - (caloriesByDate14[d] - (burnedByDate14[d] || 0)))
+    }, 0)
+    setWeightDeficit14(Math.round(deficit14))
   }
 
   const calData    = days.map(d => ({ label: dayLabel(d.date, period), value: Math.max(0, Math.round(d.calories - d.burned)) }))
@@ -293,34 +325,67 @@ export default function History({ userId, onGoToDay }) {
       </div>
 
       <div className="hist-section">
-        <h2 className="hist-title">
-          Poids
-          {weightData.length >= 2 && (() => {
-            const delta = (weightData[weightData.length - 1].value - weightData[0].value).toFixed(1)
-            const lost = -delta
-            const firstDt = new Date(weightData[0].date + 'T12:00:00')
-            const since = `${String(firstDt.getDate()).padStart(2,'0')}/${String(firstDt.getMonth()+1).padStart(2,'0')}/${String(firstDt.getFullYear()).slice(-2)}`
-            return (
-              <span className={`weight-delta ${lost > 0 ? 'deficit-positive' : lost < 0 ? 'deficit-negative' : ''}`}>
-                {lost > 0 ? `−${lost} kg` : lost < 0 ? `+${Math.abs(lost)} kg` : '= stable'} depuis le {since}
-              </span>
-            )
-          })()}
-        </h2>
-        <LineChart data={weightData} color="var(--cal)" unit=" kg" period={period} showValues />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <h2 className="hist-title" style={{ marginBottom: 0 }}>
+            Poids
+            {weightDays14.length >= 2 && (() => {
+              const delta = (weightDays14[weightDays14.length - 1].value - weightDays14[0].value).toFixed(1)
+              const lost = -delta
+              const firstDt = new Date(weightDays14[0].date + 'T12:00:00')
+              const since = `${String(firstDt.getDate()).padStart(2,'0')}/${String(firstDt.getMonth()+1).padStart(2,'0')}/${String(firstDt.getFullYear()).slice(-2)}`
+              return (
+                <span className={`weight-delta ${lost > 0 ? 'deficit-positive' : lost < 0 ? 'deficit-negative' : ''}`}>
+                  {lost > 0 ? `−${lost} kg` : lost < 0 ? `+${Math.abs(lost)} kg` : '= stable'} depuis le {since}
+                </span>
+              )
+            })()}
+          </h2>
+          {weightDeficit14 > 0 && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <div className="weight-stat-box weight-stat-deficit">
+                <span className="weight-stat-val">−{weightDeficit14} kcal</span>
+                <span className="weight-stat-label">déficit</span>
+              </div>
+              <div className="weight-stat-box weight-stat-fat">
+                <span className="weight-stat-val">≈ {(weightDeficit14 / 7700).toFixed(2).replace('.', ',')} kg</span>
+                <span className="weight-stat-label">graisse théo.</span>
+              </div>
+            </div>
+          )}
+        </div>
+        <LineChart
+          data={weightDays14}
+          color="var(--cal)"
+          unit=" kg"
+          period="month"
+          showValues
+          markerBeforeIdx={weightDays14.findIndex(d => d.date >= weekStart)}
+        />
       </div>
 
       {deficitDays.length > 0 && (
         <div className="hist-section">
           <h2 className="hist-title">
             Déficit cumulé
+            <span className="hist-goal">
+              depuis le {new Date((period === 'week' ? weekStart : shiftDate(localToday(), -29)) + 'T12:00:00')
+                .toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+            </span>
             <span className="hist-goal">objectif {goals.calories} kcal/j</span>
           </h2>
-          <div className={`deficit-total ${totalDeficit >= 0 ? 'deficit-positive' : 'deficit-negative'}`}>
-            {totalDeficit >= 0 ? '−' : '+'}{Math.abs(totalDeficit)} kcal
-            <span className="deficit-total-label">
-              {totalDeficit >= 0 ? 'déficit cumulé' : 'excédent cumulé'}
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div className={`deficit-total ${totalDeficit >= 0 ? 'deficit-positive' : 'deficit-negative'}`}>
+              {totalDeficit >= 0 ? '−' : '+'}{Math.abs(totalDeficit)} kcal
+              <span className="deficit-total-label">
+                {totalDeficit >= 0 ? 'déficit cumulé' : 'excédent cumulé'}
+              </span>
+            </div>
+            {totalDeficit > 0 && (
+              <div className="fat-equiv">
+                <span className="fat-equiv-val">≈ {(totalDeficit / 7700).toFixed(2).replace('.', ',')} kg</span>
+                <span className="fat-equiv-label">graisse théorique</span>
+              </div>
+            )}
           </div>
           <div className="deficit-rows">
             {deficitDays.map((d, i) => {
