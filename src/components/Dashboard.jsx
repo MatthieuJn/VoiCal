@@ -35,6 +35,7 @@ export default function Dashboard({ userId, initialDate }) {
   const [goals, setGoals] = useState(DEFAULT_GOALS)
   const [weight, setWeight] = useState('')
   const [savedWeight, setSavedWeight] = useState(null)
+  const [savedWeighedAt, setSavedWeighedAt] = useState(null)
   const [bedtime, setBedtime] = useState('')
   const [savedBedtime, setSavedBedtime] = useState(null)
   const [wakeup, setWakeup] = useState('')
@@ -105,8 +106,8 @@ export default function Dashboard({ userId, initialDate }) {
     setActivities(a || [])
 
     const { data: w } = await supabase.from('weight_logs').select('*').eq('user_id', userId).eq('date', selectedDate).maybeSingle()
-    if (w) { setSavedWeight(w.weight); setSavedBedtime(w.bedtime || null); setSavedWakeup(w.wakeup || null) }
-    else { setSavedWeight(null); setSavedBedtime(null); setSavedWakeup(null) }
+    if (w) { setSavedWeight(w.weight); setSavedBedtime(w.bedtime || null); setSavedWakeup(w.wakeup || null); setSavedWeighedAt(w.weighed_at || null) }
+    else { setSavedWeight(null); setSavedBedtime(null); setSavedWakeup(null); setSavedWeighedAt(null) }
   }
 
   const totals = meals.reduce((acc, m) => ({
@@ -352,11 +353,13 @@ export default function Dashboard({ userId, initialDate }) {
 
   async function saveWeight() {
     if (!weight) return
+    const weighedAt = new Date().toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' })
     await supabase.from('weight_logs').upsert(
-      { user_id: userId, date: selectedDate, weight: parseFloat(weight) },
+      { user_id: userId, date: selectedDate, weight: parseFloat(weight), weighed_at: weighedAt },
       { onConflict: 'user_id,date' }
     )
     setSavedWeight(parseFloat(weight))
+    setSavedWeighedAt(weighedAt)
     setWeight('')
   }
 
@@ -437,7 +440,7 @@ export default function Dashboard({ userId, initialDate }) {
           <h2>Poids</h2>
         </div>
         <div className="weight-row">
-          {savedWeight && <span className="weight-saved">Aujourd'hui : <strong>{savedWeight} kg</strong></span>}
+          {savedWeight && <span className="weight-saved">Aujourd'hui : <strong>{savedWeight} kg</strong>{savedWeighedAt && <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 6 }}>· {savedWeighedAt.slice(0,5)}</span>}</span>}
           <input
             type="number"
             step="0.1"

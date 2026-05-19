@@ -34,6 +34,12 @@ function emojisForActivity(type, name) {
   return [...set]
 }
 
+function fatLabel(kcal) {
+  const g = kcal / 7700
+  if (g < 1) return `≈ ${Math.round(g * 1000)} g`
+  return `≈ ${g.toFixed(2).replace('.', ',')} kg`
+}
+
 function localToday() {
   const n = new Date()
   return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`
@@ -347,7 +353,7 @@ export default function History({ userId, onGoToDay }) {
                 <span className="weight-stat-label">déficit</span>
               </div>
               <div className="weight-stat-box weight-stat-fat">
-                <span className="weight-stat-val">≈ {(weightDeficit14 / 7700).toFixed(2).replace('.', ',')} kg</span>
+                <span className="weight-stat-val">{fatLabel(weightDeficit14)}</span>
                 <span className="weight-stat-label">graisse théo.</span>
               </div>
             </div>
@@ -382,7 +388,7 @@ export default function History({ userId, onGoToDay }) {
             </div>
             {totalDeficit > 0 && (
               <div className="fat-equiv">
-                <span className="fat-equiv-val">≈ {(totalDeficit / 7700).toFixed(2).replace('.', ',')} kg</span>
+                <span className="fat-equiv-val">{fatLabel(totalDeficit)}</span>
                 <span className="fat-equiv-label">graisse théorique</span>
               </div>
             )}
