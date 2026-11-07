@@ -1,6 +1,9 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "crons": [
+    { "path": "/api/ping", "schedule": "0 6 * * *" }
+  ],
   "headers": [
     {
       "source": "/assets/(.*).js",
@@ -11,5 +14,5 @@
       "headers": [{ "key": "Content-Type", "value": "text/css" }]
     }
   ],
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
 }

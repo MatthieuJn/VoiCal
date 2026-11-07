@@ -1,8 +1,56 @@
-import { GoogleGenAI } from '@google/genai'
-
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY })
+import { supabase } from './supabase'
 
 export const GEMINI_MODEL = 'gemini-2.5-flash'
+
+// Les appels passent par /api/gemini (serveur Vercel) : la clé n'est plus dans le navigateur.
+async function generate(contents) {
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch('/api/gemini', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session?.access_token ?? ''}`,
+    },
+    body: JSON.stringify({ contents }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Erreur serveur (${res.status})`)
+  return data.text
+}
+
+// Même interface que l'ancien SDK, pour ne pas toucher au reste du fichier.
+const ai = {
+  models: {
+    generateContent: async ({ contents }) => ({ text: await generate(await normalizeAsync(contents)) }),
+  },
+}
+
+// Accepte un texte simple ou un tableau de messages, comme le SDK. Réduit les photos
+// (le serveur Vercel refuse les requêtes de plus de 4,5 Mo).
+async function normalizeAsync(contents) {
+  if (typeof contents === 'string') return [{ role: 'user', parts: [{ text: contents }] }]
+  return Promise.all(contents.map(async msg => ({
+    ...msg,
+    parts: await Promise.all(msg.parts.map(async p =>
+      p.inlineData ? { inlineData: await shrinkImage(p.inlineData) } : p)),
+  })))
+}
+
+function shrinkImage({ mimeType, data }, maxSide = 1280) {
+  return new Promise(resolve => {
+    const img = new Image()
+    img.onload = () => {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+      resolve({ mimeType: 'image/jpeg', data: canvas.toDataURL('image/jpeg', 0.85).split(',')[1] })
+    }
+    img.onerror = () => resolve({ mimeType, data })
+    img.src = `data:${mimeType};base64,${data}`
+  })
+}
 
 export function computeTotals(ingredients) {
   return ingredients.reduce((acc, ing) => {
